@@ -40,6 +40,24 @@ body {
     line-height: 1.65;
 }
 
+.skip-link {
+    position: absolute;
+    left: 50%;
+    top: 1rem;
+    transform: translate(-50%, -150%);
+    padding: 0.6rem 1.2rem;
+    background: var(--text-color);
+    color: var(--bg-color);
+    border-radius: 999px;
+    font-weight: 600;
+    z-index: 1000;
+    transition: transform 0.2s ease;
+}
+
+.skip-link:focus {
+    transform: translate(-50%, 0);
+}
+
 img {
     max-width: 100%;
     display: block;
@@ -127,6 +145,14 @@ a:hover {
 .nav-links a:hover,
 .nav-links a:focus {
     color: var(--primary);
+}
+
+.nav-links a:focus-visible,
+.nav-actions .btn:focus-visible,
+.icon-button:focus-visible,
+.menu-toggle:focus-visible {
+    outline: 3px solid rgba(99, 102, 241, 0.4);
+    outline-offset: 3px;
 }
 
 .nav-actions {
@@ -685,6 +711,11 @@ a:hover {
     color: var(--text-color);
 }
 
+.faq-item.open button,
+.faq-item button[aria-expanded="true"] {
+    background: rgba(99, 102, 241, 0.08);
+}
+
 .faq-item .icon {
     transition: transform 0.2s ease;
 }
@@ -697,11 +728,10 @@ a:hover {
 .faq-item .answer {
     padding: 0 1.6rem 1.6rem;
     color: var(--muted-text);
-    display: none;
 }
 
-.faq-item.open .answer {
-    display: block;
+.faq-item .answer[hidden] {
+    display: none;
 }
 
 /* Contact */
@@ -879,7 +909,7 @@ a:hover {
         transform: translateY(-10px);
         opacity: 0;
         pointer-events: none;
-        transition: opacity 0.2s ease;
+        transition: opacity 0.2s ease, transform 0.2s ease;
         box-shadow: var(--shadow-soft);
     }
 
@@ -889,6 +919,7 @@ a:hover {
 
     .nav-links.open {
         opacity: 1;
+        transform: translateY(0);
         pointer-events: auto;
     }
 
@@ -934,5 +965,20 @@ a:hover {
 
     .hero {
         padding: 120px 0 70px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    .skip-link {
+        transition: none;
     }
 }

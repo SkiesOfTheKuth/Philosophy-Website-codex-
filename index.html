@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Aurora Analytics helps modern sales teams accelerate revenue with AI-powered intelligence, automated workflows, and precision forecasting.">
+    <meta name="color-scheme" content="light dark">
     <title>Aurora Analytics | Precision Sales Intelligence</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -10,10 +12,11 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <nav class="top-nav" id="navbar">
+    <a href="#mainContent" class="skip-link">Skip to main content</a>
+    <nav class="top-nav" id="navbar" aria-label="Primary">
         <div class="container nav-content">
             <a href="#hero" class="brand" aria-label="Aurora Analytics home">Aurora<span>Analytics</span></a>
-            <button class="menu-toggle" id="mobileMenuToggle" aria-expanded="false" aria-controls="primary-navigation">
+            <button class="menu-toggle" id="mobileMenuToggle" type="button" aria-expanded="false" aria-controls="primary-navigation">
                 <span class="sr-only">Toggle navigation</span>
                 <span></span>
                 <span></span>
@@ -28,7 +31,7 @@
                 <li><a href="#contact">Contact</a></li>
             </ul>
             <div class="nav-actions">
-                <button id="darkModeToggle" class="icon-button" aria-label="Toggle dark mode">🌙</button>
+                <button id="darkModeToggle" class="icon-button" type="button" aria-label="Switch to dark mode" aria-pressed="false">🌙</button>
                 <a class="btn btn-outline" href="#contact">Book a demo</a>
             </div>
         </div>
@@ -86,7 +89,7 @@
         </div>
     </header>
 
-    <main>
+    <main id="mainContent">
         <section id="product" class="section product-intro">
             <div class="container two-column">
                 <div>
@@ -253,29 +256,29 @@
                 <h2>Frequently asked questions</h2>
                 <div class="faq-list">
                     <article class="faq-item">
-                        <button aria-expanded="false">
+                        <button type="button" aria-expanded="false" aria-controls="faq-1">
                             <span>How quickly can my team get onboarded?</span>
                             <span class="icon">+</span>
                         </button>
-                        <div class="answer">
+                        <div class="answer" id="faq-1" hidden>
                             Most teams are fully onboarded within 21 days. Our specialists handle integrations, data hygiene, and rep enablement, so you see value fast.
                         </div>
                     </article>
                     <article class="faq-item">
-                        <button aria-expanded="false">
+                        <button type="button" aria-expanded="false" aria-controls="faq-2">
                             <span>Does Aurora work with my existing CRM?</span>
                             <span class="icon">+</span>
                         </button>
-                        <div class="answer">
+                        <div class="answer" id="faq-2" hidden>
                             Yes. Aurora has native integrations with Salesforce, HubSpot, Dynamics 365, and can connect to custom systems via API or data warehouse.
                         </div>
                     </article>
                     <article class="faq-item">
-                        <button aria-expanded="false">
+                        <button type="button" aria-expanded="false" aria-controls="faq-3">
                             <span>Is my customer data secure?</span>
                             <span class="icon">+</span>
                         </button>
-                        <div class="answer">
+                        <div class="answer" id="faq-3" hidden>
                             Aurora is SOC 2 Type II certified, GDPR compliant, and offers enterprise-grade encryption at rest and in transit. Dedicated environments are available.
                         </div>
                     </article>
