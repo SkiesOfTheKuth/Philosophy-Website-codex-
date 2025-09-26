@@ -1,162 +1,355 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const darkModeToggle = document.getElementById('darkModeToggle');
-    const mobileMenuToggle = document.getElementById('mobileMenuToggle');
-    const navLinks = document.getElementById('primary-navigation');
-    const navbar = document.getElementById('navbar');
-    const faqButtons = document.querySelectorAll('.faq-item button');
-    const yearEl = document.getElementById('year');
+const SELECTORS = Object.freeze({
+    themeToggle: "[data-js='theme-toggle']",
+    menuToggle: "[data-js='menu-toggle']",
+    primaryNav: '.primary-nav',
+    primaryLinks: '.primary-nav__list a',
+    faq: "[data-js='faq']",
+    faqTrigger: '.faq-item > button',
+    contactForm: "[data-js='contact-form']",
+    newsletter: "[data-js='newsletter']",
+    year: "[data-js='year']"
+});
 
-    if (yearEl) {
-        yearEl.textContent = new Date().getFullYear();
-    }
+const STORAGE_KEYS = Object.freeze({
+    theme: 'aurora-theme-preference'
+});
 
-    const applyTheme = (theme) => {
-        const isDark = theme === 'dark';
-        if (isDark) {
-            document.documentElement.setAttribute('data-theme', 'dark');
-        } else {
-            document.documentElement.removeAttribute('data-theme');
+const storage = {
+    get(key) {
+        try {
+            return window.localStorage.getItem(key);
+        } catch (error) {
+            console.warn('Local storage unavailable', error);
+            return null;
         }
-
-        if (darkModeToggle) {
-            darkModeToggle.textContent = isDark ? '☀️' : '🌙';
-            darkModeToggle.setAttribute('aria-pressed', String(isDark));
-            darkModeToggle.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
-        }
-    };
-
-    const prefersDarkScheme = typeof window.matchMedia === 'function'
-        ? window.matchMedia('(prefers-color-scheme: dark)')
-        : null;
-    const storedTheme = localStorage.getItem('theme');
-
-    if (storedTheme) {
-        applyTheme(storedTheme);
-    } else {
-        applyTheme(prefersDarkScheme && prefersDarkScheme.matches ? 'dark' : 'light');
-    }
-
-    if (darkModeToggle) {
-        darkModeToggle.addEventListener('click', () => {
-            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-            const nextTheme = isDark ? 'light' : 'dark';
-            applyTheme(nextTheme);
-
-            if (nextTheme === 'dark') {
-                localStorage.setItem('theme', 'dark');
-            } else {
-                localStorage.removeItem('theme');
-            }
-        });
-    }
-
-    if (prefersDarkScheme) {
-        const handleSchemeChange = (event) => {
-            if (!localStorage.getItem('theme')) {
-                applyTheme(event.matches ? 'dark' : 'light');
-            }
-        };
-
-        if (typeof prefersDarkScheme.addEventListener === 'function') {
-            prefersDarkScheme.addEventListener('change', handleSchemeChange);
-        } else if (typeof prefersDarkScheme.addListener === 'function') {
-            prefersDarkScheme.addListener(handleSchemeChange);
+    },
+    set(key, value) {
+        try {
+            window.localStorage.setItem(key, value);
+        } catch (error) {
+            console.warn('Local storage unavailable', error);
         }
     }
+};
 
-    const closeMobileMenu = () => {
-        if (!navLinks || !mobileMenuToggle) return;
-        navLinks.classList.remove('open');
-        mobileMenuToggle.classList.remove('open');
-        mobileMenuToggle.setAttribute('aria-expanded', 'false');
-    };
+const BREAKPOINTS = Object.freeze({
+    desktop: 900
+});
 
-    if (mobileMenuToggle && navLinks) {
-        mobileMenuToggle.addEventListener('click', () => {
-            const isOpen = navLinks.classList.toggle('open');
-            mobileMenuToggle.classList.toggle('open', isOpen);
-            mobileMenuToggle.setAttribute('aria-expanded', String(isOpen));
+class ThemeController {
+    constructor(toggle) {
+        this.toggle = toggle;
+        this.html = document.documentElement;
+        this.mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        this.bindEvents();
+        this.applyInitialTheme();
+    }
 
-            if (isOpen && document.activeElement === mobileMenuToggle) {
-                const firstLink = navLinks.querySelector('a');
-                if (firstLink) {
-                    firstLink.focus();
+    bindEvents() {
+        if (!this.toggle) return;
+        this.toggle.addEventListener('click', () => this.toggleTheme());
+        this.mediaQuery.addEventListener('change', () => this.handleSystemChange());
+    }
+
+    applyInitialTheme() {
+        const stored = storage.get(STORAGE_KEYS.theme);
+        const initial = stored || (this.mediaQuery.matches ? 'dark' : 'light');
+        this.setTheme(initial, false);
+    }
+
+    setTheme(mode, persist = true) {
+        const normalized = ['light', 'dark'].includes(mode) ? mode : 'light';
+        document.documentElement.setAttribute('data-theme', normalized);
+        document.body.dataset.theme = normalized;
+        if (persist) storage.set(STORAGE_KEYS.theme, normalized);
+        this.updateToggleState(normalized);
+    }
+
+    toggleTheme() {
+        const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        this.setTheme(next);
+    }
+
+    handleSystemChange() {
+        const stored = storage.get(STORAGE_KEYS.theme);
+        if (stored) return;
+        this.setTheme(this.mediaQuery.matches ? 'dark' : 'light', false);
+    }
+
+    updateToggleState(mode) {
+        if (!this.toggle) return;
+        const isDark = mode === 'dark';
+        this.toggle.setAttribute('aria-pressed', String(isDark));
+        this.toggle.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+        this.toggle.textContent = isDark ? '☀️' : '🌙';
+    }
+}
+
+class MobileNavController {
+    constructor(toggle, nav) {
+        this.toggle = toggle;
+        this.nav = nav;
+        this.links = nav ? nav.querySelectorAll(SELECTORS.primaryLinks) : [];
+        this.isOpen = false;
+        this.handleToggle = this.handleToggle.bind(this);
+        this.handleKeydown = this.handleKeydown.bind(this);
+        this.handleResize = this.handleResize.bind(this);
+        this.bindEvents();
+    }
+
+    bindEvents() {
+        if (!this.toggle || !this.nav) return;
+        this.toggle.addEventListener('click', this.handleToggle);
+        this.links.forEach(link => link.addEventListener('click', () => this.close()));
+        document.addEventListener('keydown', this.handleKeydown);
+        window.addEventListener('resize', this.handleResize);
+    }
+
+    handleToggle() {
+        this.isOpen ? this.close() : this.open();
+    }
+
+    open() {
+        if (this.isOpen) return;
+        this.isOpen = true;
+        this.toggle.setAttribute('aria-expanded', 'true');
+        this.nav.classList.add('primary-nav--open');
+        document.body.classList.add('is-nav-open');
+    }
+
+    close() {
+        if (!this.isOpen) return;
+        this.isOpen = false;
+        this.toggle.setAttribute('aria-expanded', 'false');
+        this.nav.classList.remove('primary-nav--open');
+        document.body.classList.remove('is-nav-open');
+    }
+
+    handleKeydown(event) {
+        if (event.key === 'Escape' && this.isOpen) {
+            this.close();
+            this.toggle.focus();
+        }
+    }
+
+    handleResize() {
+        if (window.innerWidth >= BREAKPOINTS.desktop) {
+            this.close();
+        }
+    }
+}
+
+class FAQAccordion {
+    constructor(container) {
+        this.container = container;
+        this.triggers = container ? container.querySelectorAll(SELECTORS.faqTrigger) : [];
+        this.bindEvents();
+    }
+
+    bindEvents() {
+        this.triggers.forEach(trigger => {
+            trigger.addEventListener('click', () => this.toggle(trigger));
+            trigger.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    this.toggle(trigger);
                 }
-            }
-        });
-
-        navLinks.querySelectorAll('a').forEach(link => {
-            link.addEventListener('click', () => {
-                closeMobileMenu();
             });
         });
+    }
 
-        document.addEventListener('click', (event) => {
-            if (!navLinks.classList.contains('open')) {
-                return;
+    toggle(trigger) {
+        const expanded = trigger.getAttribute('aria-expanded') === 'true';
+        const targetId = trigger.getAttribute('aria-controls');
+        const content = document.getElementById(targetId);
+        if (!content) return;
+        trigger.setAttribute('aria-expanded', String(!expanded));
+        content.hidden = expanded;
+        content.parentElement?.toggleAttribute('open', !expanded);
+    }
+}
+
+class FormValidator {
+    constructor(form) {
+        this.form = form;
+        this.fields = Array.from(form.querySelectorAll('input, textarea'));
+    }
+
+    validateField(field) {
+        const errorElement = this.form.querySelector(`.form__error[data-field='${field.name}']`);
+        if (!errorElement) return true;
+        let message = '';
+        if (field.hasAttribute('required') && !field.value.trim()) {
+            message = 'This field is required.';
+        } else if (field.type === 'email' && field.value) {
+            const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/u;
+            if (!emailPattern.test(field.value.trim())) {
+                message = 'Enter a valid business email.';
             }
+        }
+        errorElement.textContent = message;
+        field.setAttribute('aria-invalid', String(Boolean(message)));
+        return message.length === 0;
+    }
 
-            if (!navLinks.contains(event.target) && !mobileMenuToggle.contains(event.target)) {
-                closeMobileMenu();
-            }
-        });
+    validateForm() {
+        return this.fields.every(field => this.validateField(field));
+    }
+}
 
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') {
-                closeMobileMenu();
+class ContactFormController {
+    constructor(form) {
+        this.form = form;
+        this.feedback = form?.querySelector('.form__feedback');
+        this.validator = form ? new FormValidator(form) : null;
+        this.bindEvents();
+    }
+
+    bindEvents() {
+        if (!this.form) return;
+        this.form.addEventListener('submit', event => this.handleSubmit(event));
+        this.form.addEventListener('input', event => {
+            if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+                this.validator?.validateField(event.target);
             }
         });
     }
 
-    const handleScroll = () => {
-        if (!navbar) return;
-        if (window.scrollY > 24) {
-            navbar.classList.add('scrolled');
-        } else {
-            navbar.classList.remove('scrolled');
-        }
-    };
-
-    handleScroll();
-    window.addEventListener('scroll', handleScroll);
-
-    const closeFaqItems = (exception) => {
-        faqButtons.forEach(button => {
-            if (button === exception) return;
-            const item = button.closest('.faq-item');
-            const answerId = button.getAttribute('aria-controls');
-            const answer = answerId ? document.getElementById(answerId) : null;
-            button.setAttribute('aria-expanded', 'false');
-            if (item) {
-                item.classList.remove('open');
-            }
-            if (answer) {
-                answer.hidden = true;
-            }
-        });
-    };
-
-    faqButtons.forEach(button => {
-        const answerId = button.getAttribute('aria-controls');
-        const answer = answerId ? document.getElementById(answerId) : null;
-        if (answer) {
-            answer.hidden = button.getAttribute('aria-expanded') !== 'true';
+    async handleSubmit(event) {
+        event.preventDefault();
+        if (!this.validator?.validateForm()) {
+            this.updateFeedback('Please correct the highlighted fields.', false);
+            return;
         }
 
-        button.addEventListener('click', () => {
-            const item = button.closest('.faq-item');
-            const isExpanded = button.getAttribute('aria-expanded') === 'true';
-            const nextState = !isExpanded;
+        this.setSubmitting(true);
+        try {
+            await this.simulateNetwork();
+            this.form.reset();
+            this.updateFeedback('Thank you! Our team will reach out within one business day.', true);
+        } catch (error) {
+            console.error(error);
+            this.updateFeedback('Something went wrong. Please try again or email hello@auroraan.ai.', false);
+        } finally {
+            this.setSubmitting(false);
+        }
+    }
 
-            closeFaqItems(nextState ? button : undefined);
+    setSubmitting(isSubmitting) {
+        const button = this.form.querySelector('button[type="submit"]');
+        if (button) {
+            button.disabled = isSubmitting;
+            button.textContent = isSubmitting ? 'Sending…' : 'Submit';
+        }
+    }
 
-            button.setAttribute('aria-expanded', String(nextState));
-            if (item) {
-                item.classList.toggle('open', nextState);
-            }
-            if (answer) {
-                answer.hidden = !nextState;
-            }
+    updateFeedback(message, isSuccess) {
+        if (!this.feedback) return;
+        this.feedback.textContent = message;
+        this.feedback.dataset.state = isSuccess ? 'success' : 'error';
+    }
+
+    simulateNetwork() {
+        return new Promise((resolve) => {
+            window.setTimeout(resolve, 1200);
         });
-    });
+    }
+}
+
+class NewsletterController {
+    constructor(form) {
+        this.form = form;
+        this.feedback = form?.querySelector('.newsletter__feedback');
+        this.bindEvents();
+    }
+
+    bindEvents() {
+        if (!this.form) return;
+        this.form.addEventListener('submit', event => this.handleSubmit(event));
+    }
+
+    async handleSubmit(event) {
+        event.preventDefault();
+        const emailInput = this.form.querySelector('input[type="email"]');
+        if (!(emailInput instanceof HTMLInputElement)) return;
+        const emailValue = emailInput.value.trim();
+        if (!emailValue) {
+            this.updateFeedback('Enter your work email to subscribe.', false);
+            return;
+        }
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/u;
+        if (!emailPattern.test(emailValue)) {
+            this.updateFeedback('That email looks incorrect. Try again?', false);
+            return;
+        }
+        this.setSubmitting(true);
+        try {
+            await this.simulateNetwork();
+            this.updateFeedback('Subscribed! Look out for our next insights report.', true);
+            this.form.reset();
+        } catch (error) {
+            console.error(error);
+            this.updateFeedback('Unable to subscribe right now. Please try again later.', false);
+        } finally {
+            this.setSubmitting(false);
+        }
+    }
+
+    setSubmitting(isSubmitting) {
+        const button = this.form.querySelector('button[type="submit"]');
+        if (button) {
+            button.disabled = isSubmitting;
+            button.textContent = isSubmitting ? 'Subscribing…' : 'Subscribe';
+        }
+    }
+
+    updateFeedback(message, isSuccess) {
+        if (!this.feedback) return;
+        this.feedback.textContent = message;
+        this.feedback.dataset.state = isSuccess ? 'success' : 'error';
+    }
+
+    simulateNetwork() {
+        return new Promise(resolve => {
+            window.setTimeout(resolve, 900);
+        });
+    }
+}
+
+class AuroraApp {
+    constructor() {
+        this.themeToggle = document.querySelector(SELECTORS.themeToggle);
+        this.menuToggle = document.querySelector(SELECTORS.menuToggle);
+        this.primaryNav = document.querySelector(SELECTORS.primaryNav);
+        this.faqContainer = document.querySelector(SELECTORS.faq);
+        this.contactForm = document.querySelector(SELECTORS.contactForm);
+        this.newsletterForm = document.querySelector(SELECTORS.newsletter);
+        this.yearTarget = document.querySelector(SELECTORS.year);
+    }
+
+    init() {
+        new ThemeController(this.themeToggle);
+        new MobileNavController(this.menuToggle, this.primaryNav);
+        new FAQAccordion(this.faqContainer);
+        new ContactFormController(this.contactForm);
+        new NewsletterController(this.newsletterForm);
+        this.setCurrentYear();
+        this.enhanceScroll();
+    }
+
+    setCurrentYear() {
+        if (!this.yearTarget) return;
+        this.yearTarget.textContent = new Date().getFullYear().toString();
+    }
+
+    enhanceScroll() {
+        if ('scrollBehavior' in document.documentElement.style) {
+            document.documentElement.style.scrollBehavior = 'smooth';
+        }
+    }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    const app = new AuroraApp();
+    app.init();
 });
