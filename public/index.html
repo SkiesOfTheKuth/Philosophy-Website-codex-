@@ -307,7 +307,7 @@
                         <li><strong>Offices:</strong> San Francisco · London · Singapore</li>
                     </ul>
                 </div>
-                <form class="form" data-js="contact-form" novalidate>
+                <form class="form" data-js="contact-form" method="post" action="/api/contact" novalidate>
                     <div class="form__group">
                         <label for="contact-name">Full name</label>
                         <input type="text" id="contact-name" name="name" placeholder="Alex Morgan" autocomplete="name" required>
@@ -361,7 +361,7 @@
             </div>
             <div>
                 <h4>Stay in the loop</h4>
-                <form class="newsletter" data-js="newsletter" novalidate>
+                <form class="newsletter" data-js="newsletter" method="post" action="/api/newsletter" novalidate>
                     <label class="sr-only" for="newsletter-email">Work email</label>
                     <input type="email" id="newsletter-email" name="email" placeholder="you@company.com" autocomplete="email" required>
                     <button class="btn btn--ghost" type="submit">Subscribe</button>

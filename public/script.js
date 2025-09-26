@@ -36,6 +36,62 @@ const BREAKPOINTS = Object.freeze({
     desktop: 900
 });
 
+class ApiError extends Error {
+    constructor(message, status, body) {
+        super(message);
+        this.name = 'ApiError';
+        this.status = status;
+        this.body = body;
+    }
+}
+
+class ValidationApiError extends ApiError {
+    constructor(message, errors, body) {
+        super(message, 422, body);
+        this.name = 'ValidationApiError';
+        this.errors = errors;
+    }
+}
+
+class ApiClient {
+    constructor(basePath = '/api') {
+        this.basePath = basePath;
+    }
+
+    async post(endpoint, payload) {
+        const response = await fetch(`${this.basePath}${endpoint}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const body = await this.parseBody(response);
+        if (!response.ok) {
+            const message = body?.message || 'Unable to complete the request right now.';
+            if (response.status === 422 && body?.errors) {
+                throw new ValidationApiError(message, body.errors, body);
+            }
+            throw new ApiError(message, response.status, body);
+        }
+
+        return body;
+    }
+
+    async parseBody(response) {
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+            try {
+                return await response.json();
+            } catch (error) {
+                console.warn('Unable to parse JSON response', error);
+            }
+        }
+        return null;
+    }
+}
+
 class ThemeController {
     constructor(toggle) {
         this.toggle = toggle;
@@ -178,30 +234,58 @@ class FormValidator {
     validateField(field) {
         const errorElement = this.form.querySelector(`.form__error[data-field='${field.name}']`);
         if (!errorElement) return true;
+        this.clearFieldError(field);
+        const value = field.value.trim();
         let message = '';
-        if (field.hasAttribute('required') && !field.value.trim()) {
+        if (field.hasAttribute('required') && !value) {
             message = 'This field is required.';
-        } else if (field.type === 'email' && field.value) {
+        } else if (field.type === 'email' && value) {
             const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/u;
-            if (!emailPattern.test(field.value.trim())) {
+            if (!emailPattern.test(value)) {
                 message = 'Enter a valid business email.';
             }
         }
-        errorElement.textContent = message;
-        field.setAttribute('aria-invalid', String(Boolean(message)));
+        if (message) {
+            errorElement.textContent = message;
+            field.setAttribute('aria-invalid', 'true');
+        }
         return message.length === 0;
     }
 
     validateForm() {
         return this.fields.every(field => this.validateField(field));
     }
+
+    clearFieldError(field) {
+        const errorElement = this.form.querySelector(`.form__error[data-field='${field.name}']`);
+        if (!errorElement) return;
+        errorElement.textContent = '';
+        field.setAttribute('aria-invalid', 'false');
+    }
+
+    clearAll() {
+        this.fields.forEach(field => this.clearFieldError(field));
+    }
+
+    applyErrors(errors) {
+        Object.entries(errors || {}).forEach(([fieldName, messages]) => {
+            const field = this.form.querySelector(`[name='${fieldName}']`);
+            const errorElement = this.form.querySelector(`.form__error[data-field='${fieldName}']`);
+            if (!field || !errorElement) return;
+            const message = Array.isArray(messages) ? messages[0] : messages;
+            if (!message) return;
+            errorElement.textContent = message;
+            field.setAttribute('aria-invalid', 'true');
+        });
+    }
 }
 
 class ContactFormController {
-    constructor(form) {
+    constructor(form, apiClient) {
         this.form = form;
         this.feedback = form?.querySelector('.form__feedback');
         this.validator = form ? new FormValidator(form) : null;
+        this.api = apiClient;
         this.bindEvents();
     }
 
@@ -217,6 +301,7 @@ class ContactFormController {
 
     async handleSubmit(event) {
         event.preventDefault();
+        this.validator?.clearAll();
         if (!this.validator?.validateForm()) {
             this.updateFeedback('Please correct the highlighted fields.', false);
             return;
@@ -224,12 +309,20 @@ class ContactFormController {
 
         this.setSubmitting(true);
         try {
-            await this.simulateNetwork();
+            const payload = this.serializeForm();
+            const response = await this.api?.post('/contact', payload);
             this.form.reset();
-            this.updateFeedback('Thank you! Our team will reach out within one business day.', true);
+            this.validator?.clearAll();
+            const successMessage = response?.message || 'Thank you! Our team will reach out within one business day.';
+            this.updateFeedback(successMessage, true);
         } catch (error) {
-            console.error(error);
-            this.updateFeedback('Something went wrong. Please try again or email hello@auroraan.ai.', false);
+            if (error instanceof ValidationApiError) {
+                this.validator?.applyErrors(error.errors);
+                this.updateFeedback(error.message || 'Please review the highlighted fields.', false);
+            } else {
+                console.error(error);
+                this.updateFeedback('Something went wrong. Please try again or email hello@auroraan.ai.', false);
+            }
         } finally {
             this.setSubmitting(false);
         }
@@ -249,17 +342,22 @@ class ContactFormController {
         this.feedback.dataset.state = isSuccess ? 'success' : 'error';
     }
 
-    simulateNetwork() {
-        return new Promise((resolve) => {
-            window.setTimeout(resolve, 1200);
-        });
+    serializeForm() {
+        const formData = new FormData(this.form);
+        return Array.from(formData.entries()).reduce((accumulator, [key, value]) => {
+            if (typeof value === 'string') {
+                accumulator[key] = value.trim();
+            }
+            return accumulator;
+        }, {});
     }
 }
 
 class NewsletterController {
-    constructor(form) {
+    constructor(form, apiClient) {
         this.form = form;
         this.feedback = form?.querySelector('.newsletter__feedback');
+        this.api = apiClient;
         this.bindEvents();
     }
 
@@ -284,12 +382,18 @@ class NewsletterController {
         }
         this.setSubmitting(true);
         try {
-            await this.simulateNetwork();
-            this.updateFeedback('Subscribed! Look out for our next insights report.', true);
+            const response = await this.api?.post('/newsletter', { email: emailValue });
+            const successMessage = response?.message || 'Subscribed! Look out for our next insights report.';
+            this.updateFeedback(successMessage, true);
             this.form.reset();
         } catch (error) {
-            console.error(error);
-            this.updateFeedback('Unable to subscribe right now. Please try again later.', false);
+            if (error instanceof ValidationApiError && error.errors?.email) {
+                const message = Array.isArray(error.errors.email) ? error.errors.email[0] : error.errors.email;
+                this.updateFeedback(message || 'Please enter a valid email address.', false);
+            } else {
+                console.error(error);
+                this.updateFeedback('Unable to subscribe right now. Please try again later.', false);
+            }
         } finally {
             this.setSubmitting(false);
         }
@@ -308,12 +412,6 @@ class NewsletterController {
         this.feedback.textContent = message;
         this.feedback.dataset.state = isSuccess ? 'success' : 'error';
     }
-
-    simulateNetwork() {
-        return new Promise(resolve => {
-            window.setTimeout(resolve, 900);
-        });
-    }
 }
 
 class AuroraApp {
@@ -325,14 +423,15 @@ class AuroraApp {
         this.contactForm = document.querySelector(SELECTORS.contactForm);
         this.newsletterForm = document.querySelector(SELECTORS.newsletter);
         this.yearTarget = document.querySelector(SELECTORS.year);
+        this.apiClient = new ApiClient();
     }
 
     init() {
         new ThemeController(this.themeToggle);
         new MobileNavController(this.menuToggle, this.primaryNav);
         new FAQAccordion(this.faqContainer);
-        new ContactFormController(this.contactForm);
-        new NewsletterController(this.newsletterForm);
+        new ContactFormController(this.contactForm, this.apiClient);
+        new NewsletterController(this.newsletterForm, this.apiClient);
         this.setCurrentYear();
         this.enhanceScroll();
     }
