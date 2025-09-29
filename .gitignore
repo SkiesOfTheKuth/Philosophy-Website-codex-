@@ -1,0 +1,10 @@
+# Build artifacts
+build/
+*.o
+
+# Node modules from previous experiments
+node_modules/
+
+# Editor swap files
+*~
+.DS_Store
