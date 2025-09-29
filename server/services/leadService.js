@@ -1,4 +1,9 @@
-const { nanoid } = require('nanoid');
+const { randomUUID } = require('crypto');
+
+const createIdentifier = (length) => {
+    const id = randomUUID().replace(/-/g, '');
+    return length ? id.slice(0, length) : id;
+};
 
 class LeadService {
     constructor() {
@@ -7,7 +12,7 @@ class LeadService {
 
     createContact(payload) {
         const record = {
-            id: nanoid(12),
+            id: createIdentifier(12),
             receivedAt: new Date().toISOString(),
             ...payload
         };
@@ -17,7 +22,7 @@ class LeadService {
 
     createNewsletterSubscription(payload) {
         const record = {
-            id: nanoid(10),
+            id: createIdentifier(10),
             receivedAt: new Date().toISOString(),
             ...payload
         };
