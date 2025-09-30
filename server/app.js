@@ -7,72 +7,101 @@ const contactRouter = require('./routes/contact');
 const newsletterRouter = require('./routes/newsletter');
 const healthRouter = require('./routes/health');
 const { HttpError } = require('./utils/httpError');
+const baseConfig = require('./config');
+const { createRateLimiter } = require('./middleware/rateLimiter');
 
-const app = express();
-
-app.disable('x-powered-by');
-
-app.use(helmet({
-    contentSecurityPolicy: false
-}));
-
-const corsOrigins = process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()).filter(Boolean)
-    : null;
-
-if (corsOrigins && corsOrigins.length > 0) {
-    app.use(cors({ origin: corsOrigins }));
-}
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-
-if (process.env.NODE_ENV !== 'test') {
-    app.use(morgan('combined'));
-}
-
-app.use('/api/health', healthRouter);
-app.use('/api/contact', contactRouter);
-app.use('/api/newsletter', newsletterRouter);
-app.use('/api', (req, res, next) => {
-    next(new HttpError(404, 'Not found'));
+const mergeConfig = (overrides = {}) => ({
+    ...baseConfig,
+    ...overrides,
+    cors: {
+        origins: overrides.cors?.origins ?? baseConfig.cors.origins
+    },
+    rateLimit: {
+        enabled: overrides.rateLimit?.enabled ?? baseConfig.rateLimit.enabled,
+        windowMs: overrides.rateLimit?.windowMs ?? baseConfig.rateLimit.windowMs,
+        max: overrides.rateLimit?.max ?? baseConfig.rateLimit.max
+    }
 });
 
-const staticDir = process.env.STATIC_DIR
-    ? path.resolve(process.env.STATIC_DIR)
-    : path.resolve(__dirname, '..', 'public');
+const createApp = (overrides = {}) => {
+    const config = mergeConfig(overrides);
+    const app = express();
 
-app.use(express.static(staticDir));
+    app.disable('x-powered-by');
 
-app.get('*', (req, res) => {
-    if (req.path.startsWith('/api/')) {
-        res.status(404).json({ status: 'error', message: 'Not found' });
-        return;
-    }
-    res.sendFile(path.join(staticDir, 'index.html'));
-});
+    app.use(helmet({
+        contentSecurityPolicy: false
+    }));
 
-// eslint-disable-next-line no-unused-vars
-app.use((err, req, res, next) => {
-    const status = err.status || 500;
-    const response = {
-        status: 'error',
-        message: status >= 500 ? 'Something went wrong on our end.' : err.message
-    };
-
-    if (err.details) {
-        response.errors = err.details;
+    if (config.cors.origins.length > 0) {
+        app.use(cors({ origin: config.cors.origins }));
     }
 
-    if (status >= 500) {
-        console.error(err);
+    app.use(express.json());
+    app.use(express.urlencoded({ extended: false }));
+
+    if (config.env !== 'test') {
+        app.use(morgan('combined'));
     }
 
-    if (res.headersSent) {
-        return;
+    if (config.rateLimit.enabled) {
+        const leadCaptureLimiter = createRateLimiter({
+            windowMs: config.rateLimit.windowMs,
+            max: config.rateLimit.max
+        });
+
+        app.use('/api/contact', leadCaptureLimiter);
+        app.use('/api/newsletter', leadCaptureLimiter);
     }
 
-    res.status(status).json(response);
-});
+    app.use('/api/health', healthRouter);
+    app.use('/api/contact', contactRouter);
+    app.use('/api/newsletter', newsletterRouter);
+    app.use('/api', (req, res, next) => {
+        next(new HttpError(404, 'Not found'));
+    });
+
+    const staticDir = config.staticDir
+        ? path.resolve(config.staticDir)
+        : path.resolve(__dirname, '..', 'public');
+
+    app.use(express.static(staticDir));
+
+    app.get('*', (req, res) => {
+        if (req.path.startsWith('/api/')) {
+            res.status(404).json({ status: 'error', message: 'Not found' });
+            return;
+        }
+        res.sendFile(path.join(staticDir, 'index.html'));
+    });
+
+    // eslint-disable-next-line no-unused-vars
+    app.use((err, req, res, next) => {
+        const status = err.status || 500;
+        const response = {
+            status: 'error',
+            message: status >= 500 ? 'Something went wrong on our end.' : err.message
+        };
+
+        if (err.details) {
+            response.errors = err.details;
+        }
+
+        if (status >= 500) {
+            console.error(err);
+        }
+
+        if (res.headersSent) {
+            return;
+        }
+
+        res.status(status).json(response);
+    });
+
+    return app;
+};
+
+const app = createApp();
 
 module.exports = app;
+module.exports.createApp = createApp;
