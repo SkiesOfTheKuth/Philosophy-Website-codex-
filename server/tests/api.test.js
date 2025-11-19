@@ -1,6 +1,10 @@
+process.env.DATABASE_URL = ':memory:';
+
 const request = require('supertest');
-const app = require('../app');
+const { createApp } = require('../app');
 const leadService = require('../services/leadService');
+
+const app = createApp();
 
 describe('Aurora Analytics API', () => {
     describe('POST /api/contact', () => {

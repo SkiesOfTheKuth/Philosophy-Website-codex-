@@ -1,3 +1,5 @@
+process.env.DATABASE_URL = ':memory:';
+
 const request = require('supertest');
 
 const ORIGINAL_ENV = { ...process.env };
