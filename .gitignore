@@ -8,3 +8,6 @@ node_modules/
 # Editor swap files
 *~
 .DS_Store
+node_modules/
+.env
+coverage/
