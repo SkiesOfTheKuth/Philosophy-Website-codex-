@@ -1,42 +1,48 @@
-const { nanoid } = require('nanoid');
+const { randomUUID } = require('crypto');
+const { defaultLeadRepository } = require('../repositories/leadRepository');
+
+const createIdentifier = (length) => {
+    const id = randomUUID().replace(/-/g, '');
+    return length ? id.slice(0, length) : id;
+};
 
 class LeadService {
-    constructor() {
-        this.reset();
+    constructor(repository = defaultLeadRepository) {
+        this.repository = repository;
     }
 
     createContact(payload) {
         const record = {
-            id: nanoid(12),
+            id: createIdentifier(12),
             receivedAt: new Date().toISOString(),
             ...payload
         };
-        this.contacts.push(record);
-        return record;
+
+        return this.repository.createContact(record);
     }
 
     createNewsletterSubscription(payload) {
         const record = {
-            id: nanoid(10),
+            id: createIdentifier(10),
             receivedAt: new Date().toISOString(),
             ...payload
         };
-        this.newsletterSubscribers.push(record);
-        return record;
+
+        return this.repository.createNewsletterSubscription(record);
     }
 
     listContacts() {
-        return [...this.contacts];
+        return this.repository.listContacts();
     }
 
     listNewsletterSubscribers() {
-        return [...this.newsletterSubscribers];
+        return this.repository.listNewsletterSubscribers();
     }
 
     reset() {
-        this.contacts = [];
-        this.newsletterSubscribers = [];
+        this.repository.reset();
     }
 }
 
 module.exports = new LeadService();
+module.exports.createLeadService = (repository) => new LeadService(repository);

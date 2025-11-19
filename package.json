@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "nodemon server/index.js",
     "start": "node server/index.js",
-    "test": "cross-env NODE_ENV=test jest --runInBand"
+    "test": "cross-env NODE_ENV=test jest --runInBand",
+    "lint": "node scripts/lint.js"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -18,7 +19,6 @@
     "express": "^4.19.2",
     "helmet": "^7.0.0",
     "morgan": "^1.10.0",
-    "nanoid": "^5.0.7",
     "zod": "^3.22.4"
   },
   "devDependencies": {
